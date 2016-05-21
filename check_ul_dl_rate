@@ -1,0 +1,48 @@
+#!/bin/sh
+
+readonly TRAFFICLIMIT=2000
+readonly DEVICENAME=ONKYO
+readonly POWERONCOMMAND=KEY_POWER
+readonly POWEROFFCOMMAND=KEY_SLEEP
+
+isTrafficOver2000() {
+	RX=$(ifconfig eth0 |grep bytes | awk '{print $2}' | sed 's/bytes://g' )
+
+	sleep 1
+
+	RX5=$(ifconfig eth0 |grep bytes | awk '{print $2}' | sed 's/bytes://g' )
+
+	diff=$((RX5-RX))
+
+	if [ "$diff" -gt $TRAFFICLIMIT  ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+if [ -f /var/lock/lock_avr ]; then
+	rm /var/lock/lock_avr
+fi
+
+while true; do
+
+if [ ! -f /var/lock/lock_avr ] && isTrafficOver2000 ; then
+	echo "AVR Starten..."
+	touch /var/lock/lock_avr
+	irsend SEND_ONCE $DEVICENAME $POWERONCOMMAND
+elif [ -f /var/lock/lock_avr ] && ! isTrafficOver2000 ; then
+	echo "Traffic under 2000, sleeping for 60."
+		sleep 60
+		if ! isTrafficOver2000 ; then
+			echo "AVR Stoppen..."
+			rm /var/lock/lock_avr
+			irsend SEND_ONCE $DEVICENAME $POWEROFFCOMMAND
+		else
+			echo "Traffic Over 2000 again, not stopping AVR."
+	fi
+fi
+done
+
+
+
